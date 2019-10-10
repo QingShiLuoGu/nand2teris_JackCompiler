@@ -27,7 +27,10 @@ public class Main {
         } else
             compileFiles.add(file);
 
+        CompilationEngine compilationEngine = new CompilationEngine();
         for (File f : compileFiles) {
+            if (!f.getName().endsWith(".jack"))
+                continue;
             String source = readFile(f);
             JackTokenizer tokenizer = new JackTokenizer(source.toCharArray());
             JackParser jackParser = new JackParser();
@@ -35,6 +38,8 @@ public class Main {
 
             String filePath = f.getAbsolutePath().replaceAll(f.getName(), f.getName() + ".xml");
             saveFile(result, filePath);
+            String outFilePath = f.getAbsolutePath().replaceAll(f.getName(), f.getName() + ".vm");
+            saveFile(compilationEngine.compile(result), outFilePath);
         }
 
         System.out.println("ended.");
