@@ -114,26 +114,26 @@ public class CompilationEngine {
     }
 
     int compileClass(int start) {
-        if (!lines.get(start).tag.equals("class"))
+        if (!Objects.equals(lines.get(start).tag,"class"))
             throw new RuntimeException("start tag is not class");
 
-        dealDefaultVars();
+        makeDefaultVarsMap();
 
         className = lines.get(start + 2).value;
-        int subrunTineStartIndex = findSingleTagIndex("subroutineDec", start, true);
+        int subruntineStartIndex = findSingleTagIndex("subroutineDec", start, true);
 
         int classVarDecStartIndex = findSingleTagIndex("classVarDec", start, true);
         if (classVarDecStartIndex != -1)
-            compileclassVarsDec(classVarDecStartIndex, subrunTineStartIndex);
+            compileclassVarsDec(classVarDecStartIndex, subruntineStartIndex);
 
-        while (lines.get(subrunTineStartIndex).tag.equals("subroutineDec"))
-            subrunTineStartIndex = compileSubRuntineDec(subrunTineStartIndex);
+        while (Objects.equals(lines.get(subruntineStartIndex).tag, "subroutineDec"))
+            subruntineStartIndex = compileSubRuntineDec(subruntineStartIndex);
 
-        return subrunTineStartIndex + 2;
+        return subruntineStartIndex + 2;
     }
 
     int compileSubRuntineDec(int start) {
-        if (!lines.get(start).tag.equals("subroutineDec"))
+        if (!Objects.equals(lines.get(start).tag,"subroutineDec"))
             throw new RuntimeException("ex");
 
         ifStatementsGlobalCount = -1;
@@ -162,7 +162,7 @@ public class CompilationEngine {
 
 
     int compileSubruntineBody(int start) {
-        if (!lines.get(start).tag.equals("subroutineBody"))
+        if (!Objects.equals(lines.get(start).tag,"subroutineBody"))
             throw new RuntimeException("ex");
         int statementsTagStartIndex = findSingleTagIndex("statements", start + 1, true);
         compileLocalVarsDec(start + 1, statementsTagStartIndex);
@@ -185,7 +185,7 @@ public class CompilationEngine {
     int compileLocalVarsDec(int start, int end) {
         localVars.clear();
         while (start < end) {
-            if (lines.get(start).tag.equals("varDec")) {
+            if (Objects.equals(lines.get(start).tag,"varDec")) {
                 VarModel varModel = new VarModel();
                 varModel.varType = VarModel.VAR_TYPE_LOCAL;
                 varModel.index = localVars.size();
@@ -211,7 +211,7 @@ public class CompilationEngine {
         return start;
     }
 
-    private void dealDefaultVars() {
+    private void makeDefaultVarsMap() {
         defaultVars.clear();
 
         VarModel thisVar = new VarModel();
@@ -230,7 +230,7 @@ public class CompilationEngine {
     void compileclassVarsDec(int start, int end) {
         localVars.clear();
         while (start < end) {
-            if (lines.get(start).tag.equals("classVarDec")) {
+            if (Objects.equals(lines.get(start).tag,"classVarDec")) {
                 int varType;
                 HashMap<String, VarModel> map;
                 VarModel varModel = new VarModel();
@@ -266,7 +266,7 @@ public class CompilationEngine {
     }
 
     int compileStatements(int start) {
-        if (!lines.get(start).tag.equals("statements"))
+        if (!Objects.equals(lines.get(start).tag,"statements"))
             throw new RuntimeException("ex");
 
         int statementsTagEndIndex = recursiveFindTagEndIndex("statements", start);
@@ -297,7 +297,7 @@ public class CompilationEngine {
     }
 
     int compileIfStatement(int start) {
-        if (!lines.get(start).tag.equals("ifStatement"))
+        if (!Objects.equals(lines.get(start).tag,"ifStatement"))
             throw new RuntimeException("ex");
         ifStatementsGlobalCount++;
         int ifStatementsCount = ifStatementsGlobalCount;
@@ -326,7 +326,7 @@ public class CompilationEngine {
     }
 
     int compileWhileStatement(int start) {
-        if (!lines.get(start).tag.equals("whileStatement"))
+        if (!Objects.equals(lines.get(start).tag,"whileStatement"))
             throw new RuntimeException("ex");
         whileStatementGlobalsCount++;
         int whileStatementsCount = whileStatementGlobalsCount;
@@ -350,7 +350,7 @@ public class CompilationEngine {
     }
 
     int compileLetStatement(int start) {
-        if (!lines.get(start).tag.equals("letStatement"))
+        if (!Objects.equals(lines.get(start).tag,"letStatement"))
             throw new RuntimeException("ex");
         if (!lines.get(start + 1).value.equals("let") || !lines.get(start + 3).value.equals("="))
             throw new RuntimeException("ex");
@@ -367,9 +367,8 @@ public class CompilationEngine {
 
 
     int compileDoStatement(int start) {
-        if (!lines.get(start).tag.equals("doStatement"))
+        if (!Objects.equals(lines.get(start).tag,"doStatement"))
             throw new RuntimeException("ex");
-
 
         String objectName;
         String funcName;
@@ -398,7 +397,7 @@ public class CompilationEngine {
     }
 
     int compileExpressionList(int start) {
-        if (!lines.get(start).tag.equals("expressionList"))
+        if (!Objects.equals(lines.get(start).tag,"expressionList"))
             throw new RuntimeException("ex");
         expressionListSize = 0;
         int expressionListTagEndIndex = findSingleTagIndex("expressionList", start + 1, false);
@@ -413,7 +412,7 @@ public class CompilationEngine {
     }
 
     int compileExpression(int start) {
-        if (!lines.get(start).tag.equals("expression"))
+        if (!Objects.equals(lines.get(start).tag,"expression"))
             throw new RuntimeException("ex");
         int startIndex = start + 1;
         int endIndex = recursiveFindTagEndIndex("expression", start);
@@ -431,7 +430,7 @@ public class CompilationEngine {
     }
 
     int compileTerm(int start) {
-        if (!lines.get(start).tag.equals("term"))
+        if (!Objects.equals(lines.get(start).tag,"term"))
             throw new RuntimeException("ex");
         int originStart = start;
         TokenXmlLine secondLine = lines.get(start + 1);
@@ -577,7 +576,7 @@ public class CompilationEngine {
 
 
     int compileReturnStatement(int start) {
-        if (!lines.get(start).tag.equals("returnStatement"))
+        if (!Objects.equals(lines.get(start).tag,"returnStatement"))
             throw new RuntimeException("ex");
 
         int endIndex = findSingleTagIndex("returnStatement", start + 1, false);
@@ -622,7 +621,7 @@ public class CompilationEngine {
     }
 
     int compileParaList(int start) {
-        if (!lines.get(start).tag.equals("parameterList"))
+        if (!Objects.equals(lines.get(start).tag,"parameterList"))
             throw new RuntimeException("ex");
         int end = findSingleTagIndex("parameterList", start + 1, false);
         start += 1;
