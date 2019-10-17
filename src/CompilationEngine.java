@@ -125,7 +125,7 @@ public class CompilationEngine {
 
         int classVarDecStartIndex = findSingleTagIndex("classVarDec", start, true);
         if (classVarDecStartIndex != -1)
-            compileclassVarsDec(classVarDecStartIndex, subruntineStartIndex);
+            makeClassVarsMap(classVarDecStartIndex, subruntineStartIndex);
 
         while (Objects.equals(lines.get(subruntineStartIndex).tag, "subroutineDec"))
             subruntineStartIndex = compileSubRuntineDec(subruntineStartIndex);
@@ -168,7 +168,7 @@ public class CompilationEngine {
         if (!Objects.equals(lines.get(start).tag, "subroutineBody"))
             throw new RuntimeException("ex");
         int statementsTagStartIndex = findSingleTagIndex("statements", start + 1, true);
-        compileLocalVarsDec(start + 1, statementsTagStartIndex);
+        makeLocalVarsMap(start + 1, statementsTagStartIndex);
 
         result.append("function").append(" ").
                 append(className).append(".").append(funcName).append(" ").append(localVars.size()).append(lineSeparator);
@@ -185,7 +185,7 @@ public class CompilationEngine {
         return findSingleTagIndex("subroutineBody", start, false);
     }
 
-    int compileLocalVarsDec(int start, int end) {
+    int makeLocalVarsMap(int start, int end) {
         localVars.clear();
         while (start < end) {
             if (Objects.equals(lines.get(start).tag, "varDec")) {
@@ -230,8 +230,9 @@ public class CompilationEngine {
         defaultVars.put(thatVar.name, thatVar);
     }
 
-    void compileclassVarsDec(int start, int end) {
-        localVars.clear();
+    void makeClassVarsMap(int start, int end) {
+        filedVars.clear();
+        staticVars.clear();
         while (start < end) {
             if (Objects.equals(lines.get(start).tag, "classVarDec")) {
                 int varType;
@@ -340,8 +341,8 @@ public class CompilationEngine {
         result.append("not").append(lineSeparator);
         result.append("if-goto ").append("WHILE_END").append(whileStatementsCount).append(lineSeparator);
 
-        int stateMentsStartIndex = findSingleTagIndex("statements", start, true);
-        start = compileStatements(stateMentsStartIndex);
+        int statementsStartIndex = findSingleTagIndex("statements", start, true);
+        start = compileStatements(statementsStartIndex);
 
         result.append("goto WHILE_EXP").append(whileStatementsCount).append(lineSeparator);
 
@@ -357,15 +358,12 @@ public class CompilationEngine {
             throw new RuntimeException("ex");
         if (!Objects.equals(lines.get(start + 1).value, "let") || !Objects.equals(lines.get(start + 3).value, "="))
             throw new RuntimeException("ex");
+
         String varName = lines.get(start + 2).value;
-
         compileExpression(start + 4);
-
         popIdentifier(varName);
 
-        start = findSingleTagIndex("letStatement", start + 4, false) + 1;
-
-        return start;
+        return findSingleTagIndex("letStatement", start + 4, false) + 1;
     }
 
 
@@ -435,6 +433,7 @@ public class CompilationEngine {
     int compileTerm(int start) {
         if (!Objects.equals(lines.get(start).tag, "term"))
             throw new RuntimeException("ex");
+
         int originStart = start;
         TokenXmlLine secondLine = lines.get(start + 1);
         int termTagEndIndex = recursiveFindTagEndIndex("term", start);
@@ -459,10 +458,17 @@ public class CompilationEngine {
                 pushIdentifier(secondLine.value);
             } else {
                 //这是一个 函数调用的形式
-                if (!Objects.equals(lines.get(start + 2).value, "."))
-                    throw new RuntimeException();
-                String obName = lines.get(start + 1).value;
-                String funcName = lines.get(start + 3).value;
+                String obName;
+                String funcName;
+
+                boolean isMethodOfThis = !Objects.equals(lines.get(start + 2).value, ".");
+                if (isMethodOfThis) {
+                    obName = "this";
+                    funcName = lines.get(start + 1).value;
+                } else {
+                    obName = lines.get(start + 1).value;
+                    funcName = lines.get(start + 3).value;
+                }
 
                 int expressionTagStartIndex = findSingleTagIndex("expressionList", start, true);
                 compileExpressionList(expressionTagStartIndex);
@@ -473,7 +479,8 @@ public class CompilationEngine {
                     obName = varModel.type;
                 }
 
-                result.append("call ").append(obName).append(".").append(funcName).append(" ").append(expressionListSize).append(lineSeparator);
+                result.append("call ").append(isMethodOfThis ? className : obName).
+                        append(".").append(funcName).append(" ").append(expressionListSize).append(lineSeparator);
             }
         } else if (Objects.equals(secondLine.tag, "keyword"))
             pushKeyword(secondLine.value);
