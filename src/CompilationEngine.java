@@ -7,14 +7,29 @@ public class CompilationEngine {
     private String className;
     private int expressionListSize = -1;
     private String funcName;
-    private boolean isFunction;
     private int whileStatementGlobalsCount = -1;
     private int ifStatementsGlobalCount = -1;
 
+    private HashMap<String, VarModel> defaultVars = new HashMap<>();
     private HashMap<String, VarModel> staticVars = new HashMap<>();
     private HashMap<String, VarModel> filedVars = new HashMap<>();
     private HashMap<String, VarModel> argumentVars = new HashMap<>();
     private HashMap<String, VarModel> localVars = new HashMap<>();
+
+    private boolean isConstructor;
+    private boolean isMethod;
+
+    private void reset() {
+        className = null;
+        expressionListSize = -1;
+        funcName = null;
+        whileStatementGlobalsCount = -1;
+        ifStatementsGlobalCount = -1;
+        staticVars.clear();
+        filedVars.clear();
+        argumentVars.clear();
+        localVars.clear();
+    }
 
 
     static class VarModel {
@@ -22,11 +37,32 @@ public class CompilationEngine {
         public static final int VAR_TYPE_FIELD = 1;
         public static final int VAR_TYPE_ARGUMENT = 2;
         public static final int VAR_TYPE_LOCAL = 3;
+        public static final int VAR_TYPE_DEFAULT = 4;
 
         public int varType;
         public int index;
         public String type;
         public String name;
+        private String segment;
+
+        public String getSegment() {
+            switch (varType) {
+                case VAR_TYPE_STATIC:
+                    return "static";
+                case VAR_TYPE_FIELD:
+                    return "this";
+                case VAR_TYPE_ARGUMENT:
+                    return "argument";
+                case VAR_TYPE_LOCAL:
+                    return "local";
+                case VAR_TYPE_DEFAULT:
+                    return "pointer";
+
+                default:
+                    throw new RuntimeException();
+            }
+
+        }
     }
 
     static class TokenXmlLine {
@@ -72,14 +108,24 @@ public class CompilationEngine {
         }
         if (lines.get(0).tag.equals("class"))
             compileClass(lines, 0, result);
-        return result.toString();
+
+        reset();
+        return result.toString().trim();
     }
 
     int compileClass(List<TokenXmlLine> lines, int start, StringBuilder result) {
         if (!lines.get(start).tag.equals("class"))
             throw new RuntimeException("start tag is not class");
+
+        dealDefaultVars();
+
         className = lines.get(start + 2).value;
-        int subrunTineStartIndex = start + 4;
+        int subrunTineStartIndex = findSingleTagIndex("subroutineDec", start, true, lines);
+
+        int classVarDecStartIndex = findSingleTagIndex("classVarDec", start, true, lines);
+        if (classVarDecStartIndex != -1)
+            compileclassVarsDec(lines, classVarDecStartIndex, subrunTineStartIndex);
+
         while (lines.get(subrunTineStartIndex).tag.equals("subroutineDec"))
             subrunTineStartIndex = compileSubRuntineDec(lines, subrunTineStartIndex, result);
 
@@ -93,7 +139,8 @@ public class CompilationEngine {
         ifStatementsGlobalCount = -1;
         whileStatementGlobalsCount = -1;
 
-        isFunction = lines.get(start + 1).value.equals("function");
+        isConstructor = Objects.equals(lines.get(start + 1).value, "constructor");
+        isMethod = Objects.equals(lines.get(start + 1).value, "method");
         String returnType = lines.get(start + 2).value;
         boolean isReturnVoid = returnType.equals("void");
         funcName = lines.get(start + 3).value;
@@ -107,14 +154,29 @@ public class CompilationEngine {
         return subruntineDecTagEndIndex + 1;
     }
 
+    private void constructorAlloc(int size, StringBuilder result) {
+        result.append("push constant ").append(size).append("\n");
+        result.append("call Memory.alloc 1").append("\n");
+        popIdentifier(result, "this");
+    }
+
+
     int compileSubruntineBody(List<TokenXmlLine> lines, int start, StringBuilder result) {
         if (!lines.get(start).tag.equals("subroutineBody"))
             throw new RuntimeException("ex");
         int statementsTagStartIndex = findSingleTagIndex("statements", start + 1, true, lines);
         compileLocalVarsDec(lines, start + 1, statementsTagStartIndex);
 
-        result.append(isFunction ? "function" : "method").append(" ").
+        result.append("function").append(" ").
                 append(className).append(".").append(funcName).append(" ").append(localVars.size()).append("\n");
+
+        if (isConstructor && filedVars.size() > 0)
+            constructorAlloc(filedVars.size(), result);
+
+        if (isMethod) {
+            result.append("push argument 0").append("\n");
+            result.append("pop pointer 0").append("\n");
+        }
 
         start = compileStatements(lines, statementsTagStartIndex, result);
         return findSingleTagIndex("subroutineBody", start, false, lines);
@@ -147,6 +209,60 @@ public class CompilationEngine {
         }
 
         return start;
+    }
+
+    private void dealDefaultVars() {
+        defaultVars.clear();
+
+        VarModel thisVar = new VarModel();
+        thisVar.varType = VarModel.VAR_TYPE_DEFAULT;
+        thisVar.index = 0;
+        thisVar.name = "this";
+        defaultVars.put(thisVar.name, thisVar);
+
+        VarModel thatVar = new VarModel();
+        thatVar.varType = VarModel.VAR_TYPE_DEFAULT;
+        thatVar.index = 1;
+        thatVar.name = "that";
+        defaultVars.put(thatVar.name, thatVar);
+    }
+
+    void compileclassVarsDec(List<TokenXmlLine> lines, int start, int end) {
+        localVars.clear();
+        while (start < end) {
+            if (lines.get(start).tag.equals("classVarDec")) {
+                int varType;
+                HashMap<String, VarModel> map;
+                VarModel varModel = new VarModel();
+                String type = lines.get(start + 2).value;
+                if (Objects.equals(lines.get(start + 1).value, "field")) {
+                    varType = VarModel.VAR_TYPE_FIELD;
+                    map = filedVars;
+                } else {
+                    varType = VarModel.VAR_TYPE_STATIC;
+                    map = staticVars;
+                }
+                varModel.name = lines.get(start + 3).value;
+                varModel.type = type;
+                varModel.varType = varType;
+                varModel.index = map.size();
+                map.put(varModel.name, varModel);
+
+                int index = start + 4;
+                while (Objects.equals(lines.get(index).value, ",")) {
+                    varModel = new VarModel();
+                    varModel.varType = varType;
+                    varModel.index = map.size();
+                    varModel.name = lines.get(index + 1).value;
+                    varModel.type = type;
+                    map.put(varModel.name, varModel);
+                    index += 2;
+                }
+
+                start = index + 2;
+            } else
+                start++;
+        }
     }
 
     int compileStatements(List<TokenXmlLine> lines, int start, StringBuilder result) {
@@ -194,13 +310,17 @@ public class CompilationEngine {
         int statementsStartIndex = findSingleTagIndex("statements", start, true, lines);
         result.append("label IF_TRUE").append(ifStatementsCount).append("\n");
         start = compileStatements(lines, statementsStartIndex, result);
-        result.append("goto IF_END").append(ifStatementsCount).append("\n");
 
-        statementsStartIndex = findSingleTagIndex("statements", start, true, lines);
-        result.append("label IF_FALSE").append(ifStatementsCount).append("\n");
-        start = compileStatements(lines, statementsStartIndex, result);
+        if (Objects.equals(lines.get(start + 2).value, "else")) {
+            result.append("goto IF_END").append(ifStatementsCount).append("\n");
 
-        result.append("label IF_END").append(ifStatementsCount).append("\n");
+            statementsStartIndex = findSingleTagIndex("statements", start, true, lines);
+            result.append("label IF_FALSE").append(ifStatementsCount).append("\n");
+            start = compileStatements(lines, statementsStartIndex, result);
+
+            result.append("label IF_END").append(ifStatementsCount).append("\n");
+        } else
+            result.append("label IF_FALSE").append(ifStatementsCount).append("\n");
 
         return findSingleTagIndex("ifStatement", start, false, lines) + 1;
     }
@@ -249,15 +369,30 @@ public class CompilationEngine {
     int compileDoStatement(List<TokenXmlLine> lines, int start, StringBuilder result) {
         if (!lines.get(start).tag.equals("doStatement"))
             throw new RuntimeException("ex");
-        String objectName = lines.get(start + 2).value;
-        String funcName = lines.get(start + 4).value;
 
-        boolean isMethod = false;
+
+        String objectName;
+        String funcName;
+        boolean isMethodOfThis = !Objects.equals(lines.get(start + 3).value, ".");
+        if (isMethodOfThis) {
+            objectName = "this";
+            funcName = lines.get(start + 2).value;
+        } else {
+            objectName = lines.get(start + 2).value;
+            funcName = lines.get(start + 4).value;
+        }
 
         int expressionTagStartIndex = findSingleTagIndex("expressionList", start, true, lines);
         start = compileExpressionList(lines, expressionTagStartIndex, result);
 
-        result.append("call ").append(objectName).append(".").append(funcName).append(" ").append(expressionListSize).append("\n");
+        VarModel varModel = findIdentifier(objectName);
+        if (varModel != null) {
+            pushIdentifier(result, objectName);
+            expressionListSize++;
+            objectName = varModel.type;
+        }
+
+        result.append("call ").append(isMethodOfThis ? className : objectName).append(".").append(funcName).append(" ").append(expressionListSize).append("\n");
         result.append("pop temp 0").append("\n");
         return findSingleTagIndex("doStatement", start, false, lines) + 1;
     }
@@ -329,6 +464,13 @@ public class CompilationEngine {
 
                 int expressionTagStartIndex = findSingleTagIndex("expressionList", start, true, lines);
                 compileExpressionList(lines, expressionTagStartIndex, result);
+                VarModel varModel = findIdentifier(obName);
+                if (varModel != null) {
+                    pushIdentifier(result, obName);
+                    expressionListSize++;
+                    obName = varModel.type;
+                }
+
                 result.append("call ").append(obName).append(".").append(funcName).append(" ").append(expressionListSize).append("\n");
             }
         } else if (secondLine.tag.equals("keyword"))
@@ -347,6 +489,8 @@ public class CompilationEngine {
             return;
         if (Objects.equals(keyword, "true") || Objects.equals(keyword, "false"))
             result.append("push constant 0").append("\n");
+        else if (Objects.equals(keyword, "this"))
+            result.append("push pointer 0").append("\n");
         else
             throw new RuntimeException();
 
@@ -366,25 +510,37 @@ public class CompilationEngine {
         if (identifier == null || identifier.isEmpty())
             return;
         VarModel varModel = null;
-        String segment = null;
         if (localVars.containsKey(identifier)) {
-            segment = "local";
             varModel = localVars.get(identifier);
         } else if (argumentVars.containsKey(identifier)) {
-            segment = "argument";
             varModel = argumentVars.get(identifier);
         } else if (filedVars.containsKey(identifier)) {
-            segment = "this";
             varModel = filedVars.get(identifier);
         } else if (staticVars.containsKey(identifier)) {
-            segment = "static";
             varModel = staticVars.get(identifier);
-        }
+        } else if (defaultVars.containsKey(identifier))
+            varModel = defaultVars.get(identifier);
 
         if (varModel == null)
             throw new RuntimeException();
         result.append(push ? "push " : "pop ");
-        result.append(segment).append(" ").append(varModel.index).append("\n");
+        result.append(varModel.getSegment()).append(" ").append(varModel.index).append("\n");
+    }
+
+    private VarModel findIdentifier(String identifier) {
+        if (identifier == null)
+            return null;
+        if (staticVars.containsKey(identifier))
+            return staticVars.get(identifier);
+        else if (filedVars.containsKey(identifier))
+            return filedVars.get(identifier);
+        else if (argumentVars.containsKey(identifier))
+            return argumentVars.get(identifier);
+        else if (localVars.containsKey(identifier))
+            return localVars.get(identifier);
+        else if (defaultVars.containsKey(identifier))
+            return defaultVars.get(identifier);
+        return null;
     }
 
 
