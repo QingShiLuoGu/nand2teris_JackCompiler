@@ -19,6 +19,7 @@ public class CompilationEngine {
     private boolean isConstructor;
     private boolean isMethod;
     private StringBuilder result = new StringBuilder();
+    private List<TokenXmlLine> lines = new ArrayList<>();
 
     private void reset() {
         className = null;
@@ -30,7 +31,8 @@ public class CompilationEngine {
         filedVars.clear();
         argumentVars.clear();
         localVars.clear();
-        result.delete(0,result.length());
+        result.delete(0, result.length());
+        lines.clear();
     }
 
 
@@ -45,7 +47,6 @@ public class CompilationEngine {
         public int index;
         public String type;
         public String name;
-        private String segment;
 
         public String getSegment() {
             switch (varType) {
@@ -102,37 +103,36 @@ public class CompilationEngine {
     String compile(String tokensXml) {
         reset();
         String[] tokenXmlStrs = tokensXml.split("\n");
-        List<TokenXmlLine> lines = new ArrayList<>();
         for (String s : tokenXmlStrs) {
             if (s == null || s.isEmpty())
                 continue;
             lines.add(new TokenXmlLine(s));
         }
         if (lines.get(0).tag.equals("class"))
-            compileClass(lines, 0);
+            compileClass(0);
         return result.toString().trim();
     }
 
-    int compileClass(List<TokenXmlLine> lines, int start) {
+    int compileClass(int start) {
         if (!lines.get(start).tag.equals("class"))
             throw new RuntimeException("start tag is not class");
 
         dealDefaultVars();
 
         className = lines.get(start + 2).value;
-        int subrunTineStartIndex = findSingleTagIndex("subroutineDec", start, true, lines);
+        int subrunTineStartIndex = findSingleTagIndex("subroutineDec", start, true);
 
-        int classVarDecStartIndex = findSingleTagIndex("classVarDec", start, true, lines);
+        int classVarDecStartIndex = findSingleTagIndex("classVarDec", start, true);
         if (classVarDecStartIndex != -1)
-            compileclassVarsDec(lines, classVarDecStartIndex, subrunTineStartIndex);
+            compileclassVarsDec(classVarDecStartIndex, subrunTineStartIndex);
 
         while (lines.get(subrunTineStartIndex).tag.equals("subroutineDec"))
-            subrunTineStartIndex = compileSubRuntineDec(lines, subrunTineStartIndex);
+            subrunTineStartIndex = compileSubRuntineDec(subrunTineStartIndex);
 
         return subrunTineStartIndex + 2;
     }
 
-    int compileSubRuntineDec(List<TokenXmlLine> lines, int start) {
+    int compileSubRuntineDec(int start) {
         if (!lines.get(start).tag.equals("subroutineDec"))
             throw new RuntimeException("ex");
 
@@ -145,12 +145,12 @@ public class CompilationEngine {
         boolean isReturnVoid = returnType.equals("void");
         funcName = lines.get(start + 3).value;
 
-        int paraListTagStartIndex = findSingleTagIndex("parameterList", start + 3, true, lines);
-        start = compileParaList(lines, paraListTagStartIndex);
-        int subruntineBodyTagStartIndex = findSingleTagIndex("subroutineBody", start, true, lines);
-        start = compileSubruntineBody(lines, subruntineBodyTagStartIndex);
+        int paraListTagStartIndex = findSingleTagIndex("parameterList", start + 3, true);
+        start = compileParaList(paraListTagStartIndex);
+        int subruntineBodyTagStartIndex = findSingleTagIndex("subroutineBody", start, true);
+        start = compileSubruntineBody(subruntineBodyTagStartIndex);
 
-        int subruntineDecTagEndIndex = findSingleTagIndex("subroutineDec", start, false, lines);
+        int subruntineDecTagEndIndex = findSingleTagIndex("subroutineDec", start, false);
         return subruntineDecTagEndIndex + 1;
     }
 
@@ -161,11 +161,11 @@ public class CompilationEngine {
     }
 
 
-    int compileSubruntineBody(List<TokenXmlLine> lines, int start) {
+    int compileSubruntineBody(int start) {
         if (!lines.get(start).tag.equals("subroutineBody"))
             throw new RuntimeException("ex");
-        int statementsTagStartIndex = findSingleTagIndex("statements", start + 1, true, lines);
-        compileLocalVarsDec(lines, start + 1, statementsTagStartIndex);
+        int statementsTagStartIndex = findSingleTagIndex("statements", start + 1, true);
+        compileLocalVarsDec(start + 1, statementsTagStartIndex);
 
         result.append("function").append(" ").
                 append(className).append(".").append(funcName).append(" ").append(localVars.size()).append("\n");
@@ -178,11 +178,11 @@ public class CompilationEngine {
             result.append("pop pointer 0").append("\n");
         }
 
-        start = compileStatements(lines, statementsTagStartIndex);
-        return findSingleTagIndex("subroutineBody", start, false, lines);
+        start = compileStatements(statementsTagStartIndex);
+        return findSingleTagIndex("subroutineBody", start, false);
     }
 
-    int compileLocalVarsDec(List<TokenXmlLine> lines, int start, int end) {
+    int compileLocalVarsDec(int start, int end) {
         localVars.clear();
         while (start < end) {
             if (lines.get(start).tag.equals("varDec")) {
@@ -227,7 +227,7 @@ public class CompilationEngine {
         defaultVars.put(thatVar.name, thatVar);
     }
 
-    void compileclassVarsDec(List<TokenXmlLine> lines, int start, int end) {
+    void compileclassVarsDec(int start, int end) {
         localVars.clear();
         while (start < end) {
             if (lines.get(start).tag.equals("classVarDec")) {
@@ -265,30 +265,30 @@ public class CompilationEngine {
         }
     }
 
-    int compileStatements(List<TokenXmlLine> lines, int start) {
+    int compileStatements(int start) {
         if (!lines.get(start).tag.equals("statements"))
             throw new RuntimeException("ex");
 
-        int statementsTagEndIndex = recursiveFindTagEndIndex("statements", start, lines);
+        int statementsTagEndIndex = recursiveFindTagEndIndex("statements", start);
         int startIndex = start + 1;
         while (startIndex < statementsTagEndIndex) {
             if (lines.get(startIndex).tag == null)
                 throw new RuntimeException("ex");
             switch (lines.get(startIndex).tag) {
                 case "doStatement":
-                    startIndex = compileDoStatement(lines, startIndex);
+                    startIndex = compileDoStatement(startIndex);
                     break;
                 case "returnStatement":
-                    startIndex = compileReturnStatement(lines, startIndex);
+                    startIndex = compileReturnStatement(startIndex);
                     break;
                 case "letStatement":
-                    startIndex = compileLetStatement(lines, startIndex);
+                    startIndex = compileLetStatement(startIndex);
                     break;
                 case "whileStatement":
-                    startIndex = compileWhileStatement(lines, startIndex);
+                    startIndex = compileWhileStatement(startIndex);
                     break;
                 case "ifStatement":
-                    startIndex = compileIfStatement(lines, startIndex);
+                    startIndex = compileIfStatement(startIndex);
                     break;
             }
         }
@@ -296,77 +296,77 @@ public class CompilationEngine {
         return startIndex;
     }
 
-    int compileIfStatement(List<TokenXmlLine> lines, int start) {
+    int compileIfStatement(int start) {
         if (!lines.get(start).tag.equals("ifStatement"))
             throw new RuntimeException("ex");
         ifStatementsGlobalCount++;
         int ifStatementsCount = ifStatementsGlobalCount;
-        int expressionTagStartIndex = findSingleTagIndex("expression", start, true, lines);
-        start = compileExpression(lines, expressionTagStartIndex);
+        int expressionTagStartIndex = findSingleTagIndex("expression", start, true);
+        start = compileExpression(expressionTagStartIndex);
 
         result.append("if-goto IF_TRUE").append(ifStatementsCount).append("\n");
         result.append("goto IF_FALSE").append(ifStatementsCount).append("\n");
 
-        int statementsStartIndex = findSingleTagIndex("statements", start, true, lines);
+        int statementsStartIndex = findSingleTagIndex("statements", start, true);
         result.append("label IF_TRUE").append(ifStatementsCount).append("\n");
-        start = compileStatements(lines, statementsStartIndex);
+        start = compileStatements(statementsStartIndex);
 
         if (Objects.equals(lines.get(start + 2).value, "else")) {
             result.append("goto IF_END").append(ifStatementsCount).append("\n");
 
-            statementsStartIndex = findSingleTagIndex("statements", start, true, lines);
+            statementsStartIndex = findSingleTagIndex("statements", start, true);
             result.append("label IF_FALSE").append(ifStatementsCount).append("\n");
-            start = compileStatements(lines, statementsStartIndex);
+            start = compileStatements(statementsStartIndex);
 
             result.append("label IF_END").append(ifStatementsCount).append("\n");
         } else
             result.append("label IF_FALSE").append(ifStatementsCount).append("\n");
 
-        return findSingleTagIndex("ifStatement", start, false, lines) + 1;
+        return findSingleTagIndex("ifStatement", start, false) + 1;
     }
 
-    int compileWhileStatement(List<TokenXmlLine> lines, int start) {
+    int compileWhileStatement(int start) {
         if (!lines.get(start).tag.equals("whileStatement"))
             throw new RuntimeException("ex");
         whileStatementGlobalsCount++;
         int whileStatementsCount = whileStatementGlobalsCount;
         result.append("label ").append("WHILE_EXP").append(whileStatementsCount).append("\n");
-        int expressionTagStartIndex = findSingleTagIndex("expression", start, true, lines);
-        start = compileExpression(lines, expressionTagStartIndex);
+        int expressionTagStartIndex = findSingleTagIndex("expression", start, true);
+        start = compileExpression(expressionTagStartIndex);
 
         result.append("not").append("\n");
         result.append("if-goto ").append("WHILE_END").append(whileStatementsCount).append("\n");
 
-        int stateMentsStartIndex = findSingleTagIndex("statements", start, true, lines);
-        start = compileStatements(lines, stateMentsStartIndex);
+        int stateMentsStartIndex = findSingleTagIndex("statements", start, true);
+        start = compileStatements(stateMentsStartIndex);
 
         result.append("goto WHILE_EXP").append(whileStatementsCount).append("\n");
 
         result.append("label ").append("WHILE_END").append(whileStatementsCount).append("\n");
 
-        int whileTagEndIndex = findSingleTagIndex("whileStatement", start, false, lines);
+        int whileTagEndIndex = findSingleTagIndex("whileStatement", start, false);
 
         return whileTagEndIndex + 1;
     }
 
-    int compileLetStatement(List<TokenXmlLine> lines, int start) {
+    int compileLetStatement(int start) {
         if (!lines.get(start).tag.equals("letStatement"))
             throw new RuntimeException("ex");
         if (!lines.get(start + 1).value.equals("let") || !lines.get(start + 3).value.equals("="))
             throw new RuntimeException("ex");
         String varName = lines.get(start + 2).value;
 
-        compileExpression(lines, start + 4);
+        compileExpression(start + 4);
 
         popIdentifier(varName);
 
-        start = findSingleTagIndex("letStatement", start + 4, false, lines) + 1;
+        start = findSingleTagIndex("letStatement", start + 4, false) + 1;
 
         return start;
     }
 
 
-    int compileDoStatement(List<TokenXmlLine> lines, int start) {
+    int compileDoStatement(int start) {
         if (!lines.get(start).tag.equals("doStatement"))
             throw new RuntimeException("ex");
 
@@ -382,8 +382,8 @@ public class CompilationEngine {
             funcName = lines.get(start + 4).value;
         }
 
-        int expressionTagStartIndex = findSingleTagIndex("expressionList", start, true, lines);
-        start = compileExpressionList(lines, expressionTagStartIndex);
+        int expressionTagStartIndex = findSingleTagIndex("expressionList", start, true);
+        start = compileExpressionList(expressionTagStartIndex);
 
         VarModel varModel = findIdentifier(objectName);
         if (varModel != null) {
@@ -394,35 +394,35 @@ public class CompilationEngine {
 
         result.append("call ").append(isMethodOfThis ? className : objectName).append(".").append(funcName).append(" ").append(expressionListSize).append("\n");
         result.append("pop temp 0").append("\n");
-        return findSingleTagIndex("doStatement", start, false, lines) + 1;
+        return findSingleTagIndex("doStatement", start, false) + 1;
     }
 
-    int compileExpressionList(List<TokenXmlLine> lines, int start) {
+    int compileExpressionList(int start) {
         if (!lines.get(start).tag.equals("expressionList"))
             throw new RuntimeException("ex");
         expressionListSize = 0;
-        int expressionListTagEndIndex = findSingleTagIndex("expressionList", start + 1, false, lines);
+        int expressionListTagEndIndex = findSingleTagIndex("expressionList", start + 1, false);
         int startIndex = start + 1;
         while (startIndex < expressionListTagEndIndex) {
             //加1是因为 expressionList 中的 expression 之间有分隔符
-            startIndex = compileExpression(lines, startIndex) + 1;
+            startIndex = compileExpression(startIndex) + 1;
             expressionListSize++;
         }
 
         return expressionListTagEndIndex + 1;
     }
 
-    int compileExpression(List<TokenXmlLine> lines, int start) {
+    int compileExpression(int start) {
         if (!lines.get(start).tag.equals("expression"))
             throw new RuntimeException("ex");
         int startIndex = start + 1;
-        int endIndex = recursiveFindTagEndIndex("expression", start, lines);
+        int endIndex = recursiveFindTagEndIndex("expression", start);
         while (startIndex < endIndex) {
             if (lines.get(startIndex).tag.equals("term"))
-                startIndex = compileTerm(lines, startIndex);
+                startIndex = compileTerm(startIndex);
             else if (lines.get(startIndex).tag.equals("symbol")) {
                 int symbolIndex = startIndex;
-                startIndex = compileTerm(lines, startIndex + 1);
+                startIndex = compileTerm(startIndex + 1);
                 compileOp(lines.get(symbolIndex).value);
             }
         }
@@ -430,26 +430,26 @@ public class CompilationEngine {
         return endIndex + 1;
     }
 
-    int compileTerm(List<TokenXmlLine> lines, int start) {
+    int compileTerm(int start) {
         if (!lines.get(start).tag.equals("term"))
             throw new RuntimeException("ex");
         int originStart = start;
         TokenXmlLine secondLine = lines.get(start + 1);
-        int termTagEndIndex = recursiveFindTagEndIndex("term", start, lines);
+        int termTagEndIndex = recursiveFindTagEndIndex("term", start);
         if (secondLine.tag.equals("integerConstant")) {
             result.append("push constant ").append(Integer.valueOf(secondLine.value)).append("\n");
         } else if (secondLine.tag.equals("symbol") && secondLine.value.equals("(")) {
-            compileExpression(lines, start + 2);
+            compileExpression(start + 2);
         } else if (secondLine.tag.equals("symbol") && secondLine.value.equals("~")) {
             if (lines.get(start + 2).tag.equals("term")) {
-                compileTerm(lines, start + 2);
+                compileTerm(start + 2);
             } else {
                 throw new RuntimeException();
             }
             result.append("not").append("\n");
         } else if (secondLine.tag.equals("symbol") && secondLine.value.equals("-")) {
             if (lines.get(start + 2).tag.equals("term")) {
-                compileTerm(lines, start + 2);
+                compileTerm(start + 2);
             } else throw new RuntimeException();
             result.append("neg").append("\n");
         } else if (secondLine.tag.equals("identifier")) {
@@ -462,8 +462,8 @@ public class CompilationEngine {
                 String obName = lines.get(start + 1).value;
                 String funcName = lines.get(start + 3).value;
 
-                int expressionTagStartIndex = findSingleTagIndex("expressionList", start, true, lines);
-                compileExpressionList(lines, expressionTagStartIndex);
+                int expressionTagStartIndex = findSingleTagIndex("expressionList", start, true);
+                compileExpressionList(expressionTagStartIndex);
                 VarModel varModel = findIdentifier(obName);
                 if (varModel != null) {
                     pushIdentifier(obName);
@@ -576,17 +576,17 @@ public class CompilationEngine {
     }
 
 
-    int compileReturnStatement(List<TokenXmlLine> lines, int start) {
+    int compileReturnStatement(int start) {
         if (!lines.get(start).tag.equals("returnStatement"))
             throw new RuntimeException("ex");
 
-        int endIndex = findSingleTagIndex("returnStatement", start + 1, false, lines);
+        int endIndex = findSingleTagIndex("returnStatement", start + 1, false);
 
         if (endIndex == start + 3) {
             result.append("push constant 0\n");
         } else {
-            int expressionStartIndex = findSingleTagIndex("expression", start, true, lines);
-            compileExpression(lines, expressionStartIndex);
+            int expressionStartIndex = findSingleTagIndex("expression", start, true);
+            compileExpression(expressionStartIndex);
         }
         result.append("return").append("\n");
 
@@ -594,7 +594,7 @@ public class CompilationEngine {
     }
 
 
-    int findSingleTagIndex(String tag, int startIndex, boolean isStart, List<TokenXmlLine> lines) {
+    int findSingleTagIndex(String tag, int startIndex, boolean isStart) {
         for (int i = startIndex; i < lines.size(); i++) {
             TokenXmlLine line = lines.get(i);
             if (line.isSingle && (line.isTagStart == isStart) && line.tag.equals(tag))
@@ -603,7 +603,7 @@ public class CompilationEngine {
         return -1;
     }
 
-    int recursiveFindTagEndIndex(String tag, int startIndex, List<TokenXmlLine> lines) {
+    int recursiveFindTagEndIndex(String tag, int startIndex) {
         int pairTagNum = 0;
         for (int i = startIndex; i < lines.size(); i++) {
             TokenXmlLine line = lines.get(i);
@@ -621,10 +621,10 @@ public class CompilationEngine {
         return -1;
     }
 
-    int compileParaList(List<TokenXmlLine> lines, int start) {
+    int compileParaList(int start) {
         if (!lines.get(start).tag.equals("parameterList"))
             throw new RuntimeException("ex");
-        int end = findSingleTagIndex("parameterList", start + 1, false, lines);
+        int end = findSingleTagIndex("parameterList", start + 1, false);
         start += 1;
         argumentVars.clear();
         while (start < end) {
