@@ -302,16 +302,6 @@ public class JackParser {
         sb.append("<integerConstant> ").append(token).append(" </integerConstant>\n");
     }
 
-
-//    private int writeStatements(int startPos, List<String> sourceTokens, StringBuilder sb) {
-//
-//    }
-//
-//    private int writeLetStatement(int startPos, List<String> sourceTokens, StringBuilder sb) {
-//
-//    }
-
-
     private int writeParmList(int startPos, List<String> sourceTokens, StringBuilder sb) {
         writeSymbol("(", sb);
         sb.append("<parameterList>\n");

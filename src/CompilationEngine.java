@@ -20,6 +20,7 @@ public class CompilationEngine {
     private boolean isMethod;
     private StringBuilder result = new StringBuilder();
     private List<TokenXmlLine> lines = new ArrayList<>();
+    private String lineSeparator = System.lineSeparator();
 
     private void reset() {
         className = null;
@@ -102,7 +103,7 @@ public class CompilationEngine {
 
     String compile(String tokensXml) {
         reset();
-        String[] tokenXmlStrs = tokensXml.split("\n");
+        String[] tokenXmlStrs = tokensXml.split(lineSeparator);
         for (String s : tokenXmlStrs) {
             if (s == null || s.isEmpty())
                 continue;
@@ -152,9 +153,13 @@ public class CompilationEngine {
         return subruntineDecTagEndIndex + 1;
     }
 
+    private void alloc(int size) {
+        result.append("push constant ").append(size).append(lineSeparator);
+        result.append("call Memory.alloc 1").append(lineSeparator);
+    }
+
     private void constructorAlloc(int size) {
-        result.append("push constant ").append(size).append("\n");
-        result.append("call Memory.alloc 1").append("\n");
+        alloc(size);
         popIdentifier("this");
     }
 
@@ -166,14 +171,14 @@ public class CompilationEngine {
         compileLocalVarsDec(start + 1, statementsTagStartIndex);
 
         result.append("function").append(" ").
-                append(className).append(".").append(funcName).append(" ").append(localVars.size()).append("\n");
+                append(className).append(".").append(funcName).append(" ").append(localVars.size()).append(lineSeparator);
 
         if (isConstructor && filedVars.size() > 0)
             constructorAlloc(filedVars.size());
 
         if (isMethod) {
-            result.append("push argument 0").append("\n");
-            result.append("pop pointer 0").append("\n");
+            result.append("push argument 0").append(lineSeparator);
+            result.append("pop pointer 0").append(lineSeparator);
         }
 
         start = compileStatements(statementsTagStartIndex);
@@ -302,23 +307,23 @@ public class CompilationEngine {
         int expressionTagStartIndex = findSingleTagIndex("expression", start, true);
         start = compileExpression(expressionTagStartIndex);
 
-        result.append("if-goto IF_TRUE").append(ifStatementsCount).append("\n");
-        result.append("goto IF_FALSE").append(ifStatementsCount).append("\n");
+        result.append("if-goto IF_TRUE").append(ifStatementsCount).append(lineSeparator);
+        result.append("goto IF_FALSE").append(ifStatementsCount).append(lineSeparator);
 
         int statementsStartIndex = findSingleTagIndex("statements", start, true);
-        result.append("label IF_TRUE").append(ifStatementsCount).append("\n");
+        result.append("label IF_TRUE").append(ifStatementsCount).append(lineSeparator);
         start = compileStatements(statementsStartIndex);
 
         if (Objects.equals(lines.get(start + 2).value, "else")) {
-            result.append("goto IF_END").append(ifStatementsCount).append("\n");
+            result.append("goto IF_END").append(ifStatementsCount).append(lineSeparator);
 
             statementsStartIndex = findSingleTagIndex("statements", start, true);
-            result.append("label IF_FALSE").append(ifStatementsCount).append("\n");
+            result.append("label IF_FALSE").append(ifStatementsCount).append(lineSeparator);
             start = compileStatements(statementsStartIndex);
 
-            result.append("label IF_END").append(ifStatementsCount).append("\n");
+            result.append("label IF_END").append(ifStatementsCount).append(lineSeparator);
         } else
-            result.append("label IF_FALSE").append(ifStatementsCount).append("\n");
+            result.append("label IF_FALSE").append(ifStatementsCount).append(lineSeparator);
 
         return findSingleTagIndex("ifStatement", start, false) + 1;
     }
@@ -328,19 +333,19 @@ public class CompilationEngine {
             throw new RuntimeException("ex");
         whileStatementGlobalsCount++;
         int whileStatementsCount = whileStatementGlobalsCount;
-        result.append("label ").append("WHILE_EXP").append(whileStatementsCount).append("\n");
+        result.append("label ").append("WHILE_EXP").append(whileStatementsCount).append(lineSeparator);
         int expressionTagStartIndex = findSingleTagIndex("expression", start, true);
         start = compileExpression(expressionTagStartIndex);
 
-        result.append("not").append("\n");
-        result.append("if-goto ").append("WHILE_END").append(whileStatementsCount).append("\n");
+        result.append("not").append(lineSeparator);
+        result.append("if-goto ").append("WHILE_END").append(whileStatementsCount).append(lineSeparator);
 
         int stateMentsStartIndex = findSingleTagIndex("statements", start, true);
         start = compileStatements(stateMentsStartIndex);
 
-        result.append("goto WHILE_EXP").append(whileStatementsCount).append("\n");
+        result.append("goto WHILE_EXP").append(whileStatementsCount).append(lineSeparator);
 
-        result.append("label ").append("WHILE_END").append(whileStatementsCount).append("\n");
+        result.append("label ").append("WHILE_END").append(whileStatementsCount).append(lineSeparator);
 
         int whileTagEndIndex = findSingleTagIndex("whileStatement", start, false);
 
@@ -389,8 +394,8 @@ public class CompilationEngine {
             objectName = varModel.type;
         }
 
-        result.append("call ").append(isMethodOfThis ? className : objectName).append(".").append(funcName).append(" ").append(expressionListSize).append("\n");
-        result.append("pop temp 0").append("\n");
+        result.append("call ").append(isMethodOfThis ? className : objectName).append(".").append(funcName).append(" ").append(expressionListSize).append(lineSeparator);
+        result.append("pop temp 0").append(lineSeparator);
         return findSingleTagIndex("doStatement", start, false) + 1;
     }
 
@@ -434,7 +439,7 @@ public class CompilationEngine {
         TokenXmlLine secondLine = lines.get(start + 1);
         int termTagEndIndex = recursiveFindTagEndIndex("term", start);
         if (Objects.equals(secondLine.tag, "integerConstant")) {
-            result.append("push constant ").append(Integer.valueOf(secondLine.value)).append("\n");
+            result.append("push constant ").append(Integer.valueOf(secondLine.value)).append(lineSeparator);
         } else if (Objects.equals(secondLine.tag, "symbol") && Objects.equals(secondLine.value, "(")) {
             compileExpression(start + 2);
         } else if (Objects.equals(secondLine.tag, "symbol") && Objects.equals(secondLine.value, "~")) {
@@ -443,12 +448,12 @@ public class CompilationEngine {
             } else {
                 throw new RuntimeException();
             }
-            result.append("not").append("\n");
+            result.append("not").append(lineSeparator);
         } else if (Objects.equals(secondLine.tag, "symbol") && Objects.equals(secondLine.value, "-")) {
             if (Objects.equals(lines.get(start + 2).tag, "term")) {
                 compileTerm(start + 2);
             } else throw new RuntimeException();
-            result.append("neg").append("\n");
+            result.append("neg").append(lineSeparator);
         } else if (Objects.equals(secondLine.tag, "identifier")) {
             if (termTagEndIndex == start + 2) {
                 pushIdentifier(secondLine.value);
@@ -468,7 +473,7 @@ public class CompilationEngine {
                     obName = varModel.type;
                 }
 
-                result.append("call ").append(obName).append(".").append(funcName).append(" ").append(expressionListSize).append("\n");
+                result.append("call ").append(obName).append(".").append(funcName).append(" ").append(expressionListSize).append(lineSeparator);
             }
         } else if (Objects.equals(secondLine.tag, "keyword"))
             pushKeyword(secondLine.value);
@@ -485,14 +490,14 @@ public class CompilationEngine {
         if (keyword == null || keyword.isEmpty())
             return;
         if (Objects.equals(keyword, "true") || Objects.equals(keyword, "false"))
-            result.append("push constant 0").append("\n");
+            result.append("push constant 0").append(lineSeparator);
         else if (Objects.equals(keyword, "this"))
-            result.append("push pointer 0").append("\n");
+            result.append("push pointer 0").append(lineSeparator);
         else
             throw new RuntimeException();
 
         if (Objects.equals(keyword, "true"))
-            result.append("not").append("\n");
+            result.append("not").append(lineSeparator);
     }
 
     private void pushIdentifier(String identifier) {
@@ -521,7 +526,7 @@ public class CompilationEngine {
         if (varModel == null)
             throw new RuntimeException();
         result.append(push ? "push " : "pop ");
-        result.append(varModel.getSegment()).append(" ").append(varModel.index).append("\n");
+        result.append(varModel.getSegment()).append(" ").append(varModel.index).append(lineSeparator);
     }
 
     private VarModel findIdentifier(String identifier) {
@@ -544,28 +549,28 @@ public class CompilationEngine {
     void compileOp(String tag) {
         switch (tag) {
             case "+":
-                result.append("add").append("\n");
+                result.append("add").append(lineSeparator);
                 break;
             case "-":
-                result.append("sub").append("\n");
+                result.append("sub").append(lineSeparator);
                 break;
             case "*":
-                result.append("call Math.multiply 2").append("\n");
+                result.append("call Math.multiply 2").append(lineSeparator);
                 break;
             case "/":
-                result.append("call Math.divide 2").append("\n");
+                result.append("call Math.divide 2").append(lineSeparator);
                 break;
             case "&gt;":
-                result.append("gt").append("\n");
+                result.append("gt").append(lineSeparator);
                 break;
             case "&lt;":
-                result.append("lt").append("\n");
+                result.append("lt").append(lineSeparator);
                 break;
             case "&amp;":
-                result.append("and").append("\n");
+                result.append("and").append(lineSeparator);
                 break;
             case "=":
-                result.append("eq").append("\n");
+                result.append("eq").append(lineSeparator);
                 break;
             default:
                 throw new RuntimeException("ex");
@@ -585,7 +590,7 @@ public class CompilationEngine {
             int expressionStartIndex = findSingleTagIndex("expression", start, true);
             compileExpression(expressionStartIndex);
         }
-        result.append("return").append("\n");
+        result.append("return").append(lineSeparator);
 
         return endIndex + 1;
     }

@@ -90,8 +90,6 @@ public class JackTokenizer {
         int end = -1;
         boolean isString = false;
         for (int i = sourceChIndex; i < source.length; i++) {
-            if (i == 550)
-                System.out.println();
             if (source[i] == '\"') {
                 if (isString && start != -1) {
                     end = i;
