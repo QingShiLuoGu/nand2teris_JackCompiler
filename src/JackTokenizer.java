@@ -127,6 +127,7 @@ public class JackTokenizer {
         if (start == -1 && sourceChIndex == (source.length - 1))
             sourceChIndex = source.length;
         String ret = start == -1 ? null : new String(Arrays.copyOfRange(source, start, end));
+        //对字符串特殊处理
         if (ret != null && isString)
             ret = "\"" + ret + "\"";
         return ret;

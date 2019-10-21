@@ -97,6 +97,10 @@ public class CompilationEngine {
             if (isComplete) {
                 int index = srcLine.indexOf('>');
                 value = srcLine.substring(index + 1, srcLine.indexOf("<", index)).trim();
+
+                //对字符串特殊处理
+                if (value.startsWith("\"") && value.endsWith("\""))
+                    value = value.substring(1, value.length() - 1);
             }
         }
     }
@@ -356,14 +360,39 @@ public class CompilationEngine {
     int compileLetStatement(int start) {
         if (!Objects.equals(lines.get(start).tag, "letStatement"))
             throw new RuntimeException("ex");
-        if (!Objects.equals(lines.get(start + 1).value, "let") || !Objects.equals(lines.get(start + 3).value, "="))
+        if (!Objects.equals(lines.get(start + 1).value, "let"))
             throw new RuntimeException("ex");
 
         String varName = lines.get(start + 2).value;
-        compileExpression(start + 4);
-        popIdentifier(varName);
+        boolean isArrayEntry = Objects.equals(lines.get(start + 3).value, "[");
+        if (isArrayEntry) {
+            //计算数组的那个位置
+            start = compileArrayReference(start + 2);
+            compileExpression(start + 1);
+            //将等号右边的expression结果临时保存一下
+            result.append("pop temp 0").append(lineSeparator);
+            //将计算出的数组的位置保存在pointer 0(用that 0 可以引用到这个地址)
+            result.append("pop pointer 1").append(lineSeparator);
+            //将等号右边的expression结果放到计算出的数组地址上
+            result.append("push temp 0").append(lineSeparator);
+            result.append("pop that 0").append(lineSeparator);
+        } else {
+            compileExpression(start + 4);
+            popIdentifier(varName);
+        }
 
         return findSingleTagIndex("letStatement", start + 4, false) + 1;
+    }
+
+    private int compileArrayReference(int start) {
+        if (!Objects.equals(lines.get(start + 1).value, "["))
+            throw new RuntimeException("ex");
+        int index = compileExpression(start + 2);
+        if (!Objects.equals(lines.get(index).value, "]"))
+            throw new RuntimeException("ex");
+        pushIdentifier(lines.get(start).value);
+        result.append("add").append(lineSeparator);
+        return index + 1;
     }
 
 
@@ -454,7 +483,13 @@ public class CompilationEngine {
             } else throw new RuntimeException();
             result.append("neg").append(lineSeparator);
         } else if (Objects.equals(secondLine.tag, "identifier")) {
-            if (termTagEndIndex == start + 2) {
+            if (Objects.equals(lines.get(start + 2).value, "[")) { //like var[index]
+                compileExpression(start + 3);
+                pushIdentifier(lines.get(start + 1).value);
+                result.append("add").append(lineSeparator);
+                result.append("pop pointer 1").append(lineSeparator);
+                result.append("push that 0").append(lineSeparator);
+            } else if (termTagEndIndex == start + 2) {
                 pushIdentifier(secondLine.value);
             } else {
                 //这是一个 函数调用的形式
@@ -484,6 +519,10 @@ public class CompilationEngine {
             }
         } else if (Objects.equals(secondLine.tag, "keyword"))
             pushKeyword(secondLine.value);
+        else if (Objects.equals(secondLine.tag, "stringConstant")) {
+            compileString(secondLine.value);
+        } else
+            throw new RuntimeException();
 
         start = termTagEndIndex + 1;
 
@@ -491,6 +530,19 @@ public class CompilationEngine {
             throw new RuntimeException();
 
         return start;
+    }
+
+    private void compileString(String input) {
+        if (input == null || input.length() == 0)
+            throw new RuntimeException();
+        char[] chars = input.toCharArray();
+
+        result.append("push constant ").append(chars.length).append(lineSeparator);
+        result.append("call String.new 1").append(lineSeparator);
+        for (char c : chars) {
+            result.append("push constant ").append((int) c).append(lineSeparator);
+            result.append("call String.appendChar 2").append(lineSeparator);
+        }
     }
 
     private void pushKeyword(String keyword) {

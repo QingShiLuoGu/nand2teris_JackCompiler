@@ -240,7 +240,7 @@ public class JackParser {
             }
             //string constant
             else if (token.startsWith("\"") && token.endsWith("\"")) {
-                token = token.substring(1, token.length() - 1);
+//                token = token.substring(1, token.length() - 1);
                 writeStringConstant(token, sb);
             } else if (JackTokenizer.isKeyword(token)) {//keyword
                 writeKeyword(token, sb);
