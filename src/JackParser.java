@@ -167,10 +167,16 @@ public class JackParser {
         int endIndex = -1;
         int statementEndIndex = -1;
         if (sourceTokens.get(startPos + 2).equals("[")) {
+            int scopeCount = 1;
             for (int i = startPos + 3; i < sourceTokens.size(); i++) {
-                if (sourceTokens.get(i).equals("]")) {
-                    endIndex = i;
-                    break;
+                if (sourceTokens.get(i).equals("["))
+                    scopeCount++;
+                else if (sourceTokens.get(i).equals("]")) {
+                    scopeCount--;
+                    if (scopeCount == 0) {
+                        endIndex = i;
+                        break;
+                    }
                 }
             }
             writeCommmon(sourceTokens.get(startPos + 2), sb);

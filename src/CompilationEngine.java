@@ -554,6 +554,8 @@ public class CompilationEngine {
             result.append("push constant 0").append(lineSeparator);
         else if (Objects.equals(keyword, "this"))
             result.append("push pointer 0").append(lineSeparator);
+        else if (Objects.equals(keyword, "null"))
+            result.append("push constant 0").append(lineSeparator);
         else
             throw new RuntimeException();
 
