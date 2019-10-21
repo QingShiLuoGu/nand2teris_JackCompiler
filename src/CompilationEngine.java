@@ -411,15 +411,17 @@ public class CompilationEngine {
             funcName = lines.get(start + 4).value;
         }
 
-        int expressionTagStartIndex = findSingleTagIndex("expressionList", start, true);
-        start = compileExpressionList(expressionTagStartIndex);
-
+        expressionListSize = 0;
         VarModel varModel = findIdentifier(objectName);
         if (varModel != null) {
             pushIdentifier(objectName);
             expressionListSize++;
             objectName = varModel.type;
         }
+
+        int expressionTagStartIndex = findSingleTagIndex("expressionList", start, true);
+        start = compileExpressionList(expressionTagStartIndex);
+
 
         result.append("call ").append(isMethodOfThis ? className : objectName).append(".").append(funcName).append(" ").append(expressionListSize).append(lineSeparator);
         result.append("pop temp 0").append(lineSeparator);
@@ -429,7 +431,6 @@ public class CompilationEngine {
     int compileExpressionList(int start) {
         if (!Objects.equals(lines.get(start).tag, "expressionList"))
             throw new RuntimeException("ex");
-        expressionListSize = 0;
         int expressionListTagEndIndex = findSingleTagIndex("expressionList", start + 1, false);
         int startIndex = start + 1;
         while (startIndex < expressionListTagEndIndex) {
@@ -505,14 +506,15 @@ public class CompilationEngine {
                     funcName = lines.get(start + 3).value;
                 }
 
-                int expressionTagStartIndex = findSingleTagIndex("expressionList", start, true);
-                compileExpressionList(expressionTagStartIndex);
+                expressionListSize = 0;
                 VarModel varModel = findIdentifier(obName);
                 if (varModel != null) {
                     pushIdentifier(obName);
                     expressionListSize++;
                     obName = varModel.type;
                 }
+                int expressionTagStartIndex = findSingleTagIndex("expressionList", start, true);
+                compileExpressionList(expressionTagStartIndex);
 
                 result.append("call ").append(isMethodOfThis ? className : obName).
                         append(".").append(funcName).append(" ").append(expressionListSize).append(lineSeparator);
@@ -631,6 +633,9 @@ public class CompilationEngine {
             case "=":
                 result.append("eq").append(lineSeparator);
                 break;
+            case "|":
+                result.append("or").append(lineSeparator);
+                break;
             default:
                 throw new RuntimeException("ex");
         }
@@ -688,6 +693,9 @@ public class CompilationEngine {
         int end = findSingleTagIndex("parameterList", start + 1, false);
         start += 1;
         argumentVars.clear();
+        //purpose: size of arguments add 1
+        if (isMethod)
+            argumentVars.put("ob", new VarModel());
         while (start < end) {
             if (Objects.equals(lines.get(start).value, ",")) {
                 start++;
